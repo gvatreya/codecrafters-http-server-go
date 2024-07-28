@@ -73,7 +73,7 @@ func handleConnection(conn net.Conn, filesDir string) {
 	}
 
 	if strings.HasPrefix(req.Target, "/files/") {
-		msg = getFiles(strings.Split(req.Target, "/files/")[1], filesDir)
+		msg = processFilesRequest(req, strings.Split(req.Target, "/files/")[1], filesDir)
 	}
 
 	no_bytes, err := conn.Write([]byte(msg))
@@ -126,13 +126,32 @@ func parseRequestLine(readBuff []byte) Request {
 	return req
 }
 
-func getFiles(fileName string, filesDir string) string {
+func processFilesRequest(req Request, fileName string, filesDir string) string {
 	absoluteFilePath := fmt.Sprintf("%v/%v", filesDir, fileName)
+
+	if req.Method == "GET" {
+		return getFile(absoluteFilePath)
+	} 
+	if (req.Method == "POST") {
+		return createFile(absoluteFilePath, req)
+	}
+	return "HTTP/1.1 400 BAD REQUEST\r\n\r\n"
+}
+
+func getFile(absoluteFilePath string) string {
 	data, err := os.ReadFile(absoluteFilePath)
 	if err != nil {
 		fmt.Printf("error %q reading file %v", err.Error(), absoluteFilePath)
 		return "HTTP/1.1 404 Not Found\r\n\r\n"
 	}
 	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(string(data)), string(data))
+}
 
+func createFile(absoluteFilePath string, req Request) string {
+	err := os.WriteFile(absoluteFilePath, []byte(req.Body), 0644)
+	if err != nil {
+		fmt.Printf("Error writing to file: %q\n", err.Error())
+		os.Exit(1)
+	}
+	return "HTTP/1.1 201 Created\r\n\r\n"
 }
