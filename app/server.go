@@ -119,7 +119,7 @@ func parseRequestLine(readBuff []byte) Request {
 				req.Headers[headerParts[0]] = strings.Trim(headerParts[1], " ")
 			} else {
 				// This must be the body
-				req.Body = req.Body + part
+				req.Body = req.Body + strings.Trim(part, "\x00")
 			}
 		}
 	}
