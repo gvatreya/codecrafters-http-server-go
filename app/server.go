@@ -55,6 +55,11 @@ func handleConnection(conn net.Conn) {
 		msg = "HTTP/1.1 200 OK\r\n\r\n"
 	}
 
+	if strings.HasPrefix(req.Target, "/echo/") {
+		toEcho := strings.Split(req.Target, "/echo/")
+		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(toEcho[1]), toEcho[1])
+	}
+
 	no_bytes, err := conn.Write([]byte(msg))
 	if err != nil {
 		fmt.Printf("Error writing response: %q\n", err.Error())
