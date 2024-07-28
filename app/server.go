@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -25,6 +26,9 @@ func main() {
 	server := "0.0.0.0"
 	port := "4221"
 
+	filesDir := flag.String("directory", "/tmp", "Directory where the files are stored")
+	flag.Parse()
+
 	l, err := net.Listen("tcp", fmt.Sprintf("%v:%v", server, port))
 	if err != nil {
 		fmt.Printf("Failed to bind to port %q\n", port)
@@ -41,12 +45,12 @@ func main() {
 			fmt.Printf("Error accepting connection: %q\n", err.Error())
 			os.Exit(1)
 		}
-		go handleConnection(conn)
+		go handleConnection(conn, *filesDir)
 	}
 
 }
 
-func handleConnection(conn net.Conn) {
+func handleConnection(conn net.Conn, filesDir string) {
 
 	defer conn.Close()
 
@@ -66,6 +70,10 @@ func handleConnection(conn net.Conn) {
 	if req.Target == "/user-agent" {
 		ua := req.Headers["User-Agent"]
 		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(ua), ua)
+	}
+
+	if strings.HasPrefix(req.Target, "/files/") {
+		msg = getFiles(strings.Split(req.Target, "/files/")[1], filesDir)
 	}
 
 	no_bytes, err := conn.Write([]byte(msg))
@@ -116,4 +124,15 @@ func parseRequestLine(readBuff []byte) Request {
 		}
 	}
 	return req
+}
+
+func getFiles(fileName string, filesDir string) string {
+	absoluteFilePath := fmt.Sprintf("%v/%v", filesDir, fileName)
+	data, err := os.ReadFile(absoluteFilePath)
+	if err != nil {
+		fmt.Printf("error %q reading file %v", err.Error(), absoluteFilePath)
+		return "HTTP/1.1 404 Not Found\r\n\r\n"
+	}
+	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(string(data)), string(data))
+
 }
