@@ -8,11 +8,14 @@ import (
 )
 
 type Request struct {
+	// Request line
 	Method  string
 	Target  string
 	Version string
-
+	// Headers
 	Headers map[string]string
+	// Body
+	Body string
 }
 
 func main() {
@@ -51,13 +54,18 @@ func handleConnection(conn net.Conn) {
 
 	msg := "HTTP/1.1 404 Not Found\r\n\r\n"
 
-	if req.Target == "/"{
+	if req.Target == "/" {
 		msg = "HTTP/1.1 200 OK\r\n\r\n"
 	}
 
 	if strings.HasPrefix(req.Target, "/echo/") {
 		toEcho := strings.Split(req.Target, "/echo/")
 		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(toEcho[1]), toEcho[1])
+	}
+
+	if req.Target == "/user-agent" {
+		ua := req.Headers["User-Agent"]
+		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(ua), ua)
 	}
 
 	no_bytes, err := conn.Write([]byte(msg))
@@ -67,7 +75,7 @@ func handleConnection(conn net.Conn) {
 	fmt.Printf("Wrote %d bytes\n", no_bytes)
 }
 
-func parseRequest(conn net.Conn) Request{
+func parseRequest(conn net.Conn) Request {
 
 	readBuff := make([]byte, 1024)
 	noOfBytes, err := conn.Read(readBuff)
@@ -80,9 +88,11 @@ func parseRequest(conn net.Conn) Request{
 
 }
 
-func parseRequestLine(readBuff []byte) Request{
+func parseRequestLine(readBuff []byte) Request {
 	requestStringParts := strings.Split(string(readBuff), "\r\n")
 	req := Request{}
+	req.Headers = make(map[string]string)
+	headerComplete := false
 	for idx, part := range requestStringParts {
 		if idx == 0 {
 			fmt.Printf("Found request line %q\n", part)
@@ -90,6 +100,19 @@ func parseRequestLine(readBuff []byte) Request{
 			req.Method = requestLineParts[0]
 			req.Target = requestLineParts[1]
 			req.Version = requestLineParts[2]
+		} else {
+			// We are now dealing with headers or body
+			if len(part) == 0 {
+				headerComplete = true
+			}
+			// We are still processing headers
+			if !headerComplete {
+				headerParts := strings.Split(part, ":")
+				req.Headers[headerParts[0]] = strings.Trim(headerParts[1], " ")
+			} else {
+				// This must be the body
+				req.Body = req.Body + part
+			}
 		}
 	}
 	return req
