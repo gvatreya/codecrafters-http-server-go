@@ -41,7 +41,7 @@ func main() {
 			fmt.Printf("Error accepting connection: %q\n", err.Error())
 			os.Exit(1)
 		}
-		handleConnection(conn)
+		go handleConnection(conn)
 	}
 
 }
