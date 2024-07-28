@@ -16,9 +16,15 @@ func main() {
 		os.Exit(1)
 	}
 	
-	_, err = l.Accept()
+	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
 	}
+	msg := "HTTP/1.1 200 OK\r\n\r\n"
+	no_bytes, err := conn.Write([]byte(msg))
+	if err != nil {
+		fmt.Println("Error writing response: ", err.Error())
+	}
+	fmt.Printf("Wrote %d bytes", no_bytes)
 }
