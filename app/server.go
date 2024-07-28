@@ -11,9 +11,9 @@ func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	server := "0.0.0.0"
-	port := 4221
+	port := "4221"
 
-	l, err := net.Listen("tcp", fmt.Sprintf("%q:%q", server, port))
+	l, err := net.Listen("tcp", fmt.Sprintf("%v:%v", server, port))
 	if err != nil {
 		fmt.Printf("Failed to bind to port %q\n", port)
 		os.Exit(1)
