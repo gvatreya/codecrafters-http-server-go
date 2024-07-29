@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -17,6 +18,25 @@ type Request struct {
 	Headers map[string]string
 	// Body
 	Body string
+}
+
+type Response struct {
+	Version       string
+	StatusCode    string
+	StatusMessage string
+	Headers       map[string]string
+	Body          string
+}
+
+func (r *Response)ToMessage() string {
+	var sb strings.Builder
+	for key, value := range r.Headers {
+		sb.WriteString(key)
+		sb.WriteString(": ")
+		sb.WriteString(value)
+		sb.WriteString("\r\n")
+	}
+	return fmt.Sprintf("%s %s %s\r\n%s\r\n%s", r.Version, r.StatusCode, r.StatusMessage, sb.String(), r.Body)
 }
 
 func main() {
@@ -56,25 +76,44 @@ func handleConnection(conn net.Conn, filesDir string) {
 
 	req := parseRequest(conn)
 
+	resp := Response{
+		Version: "HTTP/1.1",
+		StatusCode: "404",
+		StatusMessage: "Not Found",
+		Headers: make(map[string]string),
+	}
+
 	msg := "HTTP/1.1 404 Not Found\r\n\r\n"
 
 	if req.Target == "/" {
+		resp.StatusCode = "200"
+		resp.StatusMessage = "OK"
 		msg = "HTTP/1.1 200 OK\r\n\r\n"
 	}
 
 	if strings.HasPrefix(req.Target, "/echo/") {
 		toEcho := strings.Split(req.Target, "/echo/")
-		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(toEcho[1]), toEcho[1])
+		resp.StatusCode = "200"
+		resp.StatusMessage = "OK"
+		resp.Headers["Content-Type"] = "text/plain"
+		resp.Headers["Content-Length"] = strconv.Itoa(len(toEcho[1]))
+		resp.Body = toEcho[1]
 	}
 
 	if req.Target == "/user-agent" {
 		ua := req.Headers["User-Agent"]
-		msg = fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%v", len(ua), ua)
+		resp.StatusCode = "200"
+		resp.StatusMessage = "OK"
+		resp.Headers["Content-Type"] = "text/plain"
+		resp.Headers["Content-Length"] = strconv.Itoa(len(ua))
+		resp.Body = ua
 	}
 
 	if strings.HasPrefix(req.Target, "/files/") {
-		msg = processFilesRequest(req, strings.Split(req.Target, "/files/")[1], filesDir)
+		resp = processFilesRequest(req, strings.Split(req.Target, "/files/")[1], filesDir)
 	}
+
+	msg = resp.ToMessage()
 
 	no_bytes, err := conn.Write([]byte(msg))
 	if err != nil {
@@ -126,32 +165,53 @@ func parseRequestLine(readBuff []byte) Request {
 	return req
 }
 
-func processFilesRequest(req Request, fileName string, filesDir string) string {
+func processFilesRequest(req Request, fileName string, filesDir string) Response {
 	absoluteFilePath := fmt.Sprintf("%v/%v", filesDir, fileName)
 
 	if req.Method == "GET" {
 		return getFile(absoluteFilePath)
-	} 
-	if (req.Method == "POST") {
+	}
+	if req.Method == "POST" {
 		return createFile(absoluteFilePath, req)
 	}
-	return "HTTP/1.1 400 BAD REQUEST\r\n\r\n"
+	resp := Response{
+		Version: "HTTP/1.1",
+		StatusCode: "404",
+		StatusMessage: "Not Found",
+		Headers: make(map[string]string),
+	}
+	return resp
 }
 
-func getFile(absoluteFilePath string) string {
+func getFile(absoluteFilePath string) Response {
 	data, err := os.ReadFile(absoluteFilePath)
+	resp := Response{
+		Version: "HTTP/1.1",
+		StatusCode: "404",
+		StatusMessage: "Not Found",
+		Headers: make(map[string]string),
+	}
 	if err != nil {
 		fmt.Printf("error %q reading file %v", err.Error(), absoluteFilePath)
-		return "HTTP/1.1 404 Not Found\r\n\r\n"
 	}
-	return fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n%s", len(string(data)), string(data))
+	resp.StatusCode = "200"
+	resp.StatusMessage = "OK"
+	resp.Headers["Content-Type"] = "application/octet-stream"
+	resp.Headers["Content-Length"] = strconv.Itoa(len(string(data)))
+	resp.Body = string(data)
+	return resp
 }
 
-func createFile(absoluteFilePath string, req Request) string {
+func createFile(absoluteFilePath string, req Request) Response {
 	err := os.WriteFile(absoluteFilePath, []byte(req.Body), 0644)
 	if err != nil {
 		fmt.Printf("Error writing to file: %q\n", err.Error())
 		os.Exit(1)
 	}
-	return "HTTP/1.1 201 Created\r\n\r\n"
+	resp := Response {
+		Version: "HTTP/1.1",
+		StatusCode: "201",
+		StatusMessage: "Created",
+	}
+	return resp
 }
