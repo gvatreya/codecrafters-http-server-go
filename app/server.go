@@ -83,12 +83,15 @@ func handleConnection(conn net.Conn, filesDir string) {
 		Headers: make(map[string]string),
 	}
 
-	msg := "HTTP/1.1 404 Not Found\r\n\r\n"
+	supported := isEncryptionHeaderSupported(req.Headers)
+
+	if supported {
+		resp.Headers["Content-Encoding"] = "gzip"
+	}
 
 	if req.Target == "/" {
 		resp.StatusCode = "200"
 		resp.StatusMessage = "OK"
-		msg = "HTTP/1.1 200 OK\r\n\r\n"
 	}
 
 	if strings.HasPrefix(req.Target, "/echo/") {
@@ -113,7 +116,7 @@ func handleConnection(conn net.Conn, filesDir string) {
 		resp = processFilesRequest(req, strings.Split(req.Target, "/files/")[1], filesDir)
 	}
 
-	msg = resp.ToMessage()
+	msg := resp.ToMessage()
 
 	no_bytes, err := conn.Write([]byte(msg))
 	if err != nil {
@@ -193,6 +196,7 @@ func getFile(absoluteFilePath string) Response {
 	}
 	if err != nil {
 		fmt.Printf("error %q reading file %v", err.Error(), absoluteFilePath)
+		return resp
 	}
 	resp.StatusCode = "200"
 	resp.StatusMessage = "OK"
@@ -214,4 +218,13 @@ func createFile(absoluteFilePath string, req Request) Response {
 		StatusMessage: "Created",
 	}
 	return resp
+}
+
+func isEncryptionHeaderSupported(headers map[string]string) bool {
+	for key, value := range headers {
+		if key == "Accept-Encoding" {
+			return value == "gzip"
+		}
+	}
+	return false
 }
