@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"net"
@@ -29,6 +31,28 @@ type Response struct {
 }
 
 func (r *Response)ToMessage() string {
+	gzipCompression := false
+	val, ok := r.Headers["Content-Encoding"] 
+	if ok {
+		if val == "gzip" {
+			gzipCompression = true
+		}
+	}
+	
+	if gzipCompression && len(r.Body) > 0 {
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		defer gw.Close()
+		noOfBytes, err := gw.Write([]byte(r.Body))
+		if err != nil {
+			fmt.Printf("Failed to compress response %q", err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Compressed bytes %d\n", noOfBytes)
+		gw.Close()
+		r.Body = buf.String()
+		r.Headers["Content-Length"] = strconv.Itoa(len(r.Body))
+	}
 	var sb strings.Builder
 	for key, value := range r.Headers {
 		sb.WriteString(key)
