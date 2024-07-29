@@ -223,7 +223,7 @@ func createFile(absoluteFilePath string, req Request) Response {
 func isEncryptionHeaderSupported(headers map[string]string) bool {
 	for key, value := range headers {
 		if key == "Accept-Encoding" {
-			return value == "gzip"
+			return strings.Contains(value, "gzip")
 		}
 	}
 	return false
